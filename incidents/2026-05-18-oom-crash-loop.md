@@ -31,9 +31,11 @@ RestartSec=5
 
 ---
 
-## Åtgärd (genomförd 2026-05-19)
+## Åtgärder (genomförda 2026-05-19)
 
-Alla user-services på Hetzner-VPS:en fick:
+### 1. StartLimitBurst — klipper crash-loopen (primär åtgärd)
+
+Alla persistenta user-services fick:
 
 ```ini
 Restart=on-failure   # eller always
@@ -42,13 +44,36 @@ StartLimitBurst=5
 StartLimitIntervalSec=120
 ```
 
-Innebär: max 5 omstarter per 2-minutersperiod, sedan ger systemd upp och tjänsten hamnar i `failed`-state tills manuell `systemctl --user reset-failed && systemctl --user start <tjänst>`.
+Innebär: max 5 omstarter per 2-minutersperiod, sedan ger systemd upp och tjänsten hamnar i `failed`-state tills manuell återstart.
+
+### 2. Cgroup-resursbegränsningar — sekundärt skyddslager
+
+Om en crash-loop ändå uppstår (annan orsak) begränsar `MemoryMax` skadan till att stanna inom tjänstens egna cgroup, utan att tömma serverns RAM.
+
+Satt med ~10× marginal mot uppmätt peak — avsett att bara bita vid verklig anomali, inte påverka normal drift.
+
+| Tjänst | Peak RAM (mätt) | MemoryMax | CPUQuota |
+|---|---|---|---|
+| `aj-bevakning-dashboard` | ~45 MB | 512 MB | 150 % |
+| `maltag` | ~31 MB | 256 MB | 100 % |
+
+```ini
+# Komplett service-skelett med båda skydden:
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=120
+MemoryMax=512M      # justera per tjänst
+CPUQuota=150%       # justera per tjänst
+```
+
+Kontrollera att gränserna syns i `systemctl --user status <tjänst>` — ska visa `max: 512.0M` eller liknande.
 
 ---
 
 ## Checklista för alla framtida systemd user-services
 
-Kopiera detta skelett. Fyll i det som faktiskt behövs, ta inte bort raden med `StartLimitBurst`.
+Kopiera detta skelett. Ta inte bort `StartLimitBurst` eller `MemoryMax`.
 
 ```ini
 [Unit]
@@ -63,10 +88,14 @@ Restart=on-failure
 RestartSec=10
 StartLimitBurst=5
 StartLimitIntervalSec=120
+MemoryMax=<N>M
+CPUQuota=<N>%
 
 [Install]
 WantedBy=default.target
 ```
+
+**Tumregel för dimensionering:** mät peak med `systemctl --user status` efter normal drift, multiplicera med 8–10 för `MemoryMax`. CPU-quota sätts generöst (100–200 %) — syftet är skydd, inte strypning.
 
 ---
 
@@ -76,7 +105,6 @@ WantedBy=default.target
 |---|---|
 | Ingen swap på VPS (3,7 GB RAM, 0 swap) | Öppen — lägg till 1 GB swapfile |
 | Vad skapade zombie på port 8095? | Oklart — troligen `systemctl --user restart` utan att vänta på clean shutdown |
-| Övriga services utan `StartLimitBurst`? | Kontrollera med `grep -rL StartLimitBurst ~/.config/systemd/user/` |
 
 ---
 
@@ -100,6 +128,9 @@ systemctl --user start <tjänst>
 
 # Hitta services som saknar StartLimitBurst
 grep -rL StartLimitBurst ~/.config/systemd/user/*.service
+
+# Hitta services som saknar MemoryMax
+grep -rL MemoryMax ~/.config/systemd/user/*.service
 
 # Snabb OOM-historik
 journalctl --user --since "yesterday" -p warning --no-pager | grep -i "oom\|kill\|failed"
