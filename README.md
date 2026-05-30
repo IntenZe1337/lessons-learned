@@ -1,5 +1,8 @@
 # lessons-learned
 
+> **Senaste version:** Ej taggad än.
+> Versionshistorik: [CHANGELOG.md](CHANGELOG.md)
+
 Lärdomar från incidents, felbeslut och nära-ögat-situationer i infrastruktur och kod.
 
 ## Syfte
