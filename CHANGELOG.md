@@ -7,5 +7,5 @@ Alla notabla ändringar dokumenteras här. Formatet följer
 
 ## [2026-05-19] - initial
 
-### Added
+### Tillagt
 - Repo initierat för att samla lärdomar från incidents, felbeslut och nära-ögat-situationer i infrastruktur och kod.
